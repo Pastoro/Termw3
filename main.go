@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,33 +12,13 @@ import (
 	"golang.org/x/net/html"
 )
 
-type resp []struct {
+// Response body from wibly.me/json.
+type response []struct {
 	URL         string `json:"URL"`
 	Title       string `json:"Title"`
 	Snippet     string `json:"Snippet"`
 	Description string `json:"Description"`
 }
-
-func main() {
-	req, _ := http.NewRequest("GET", "https://wiby.me/json/?q=test", nil)
-	r, err := os.Open("Test.html")
-	if err != nil {
-		println(err)
-	}
-	res, _ := http.DefaultClient.Do(req)
-	defer res.Body.Close()
-	var rep resp
-	bo, _ := io.ReadAll(res.Body)
-	json.Unmarshal(bo, &rep)
-	fmt.Print(rep)
-	doc, err := html.Parse(r)
-	if err != nil {
-		println(err)
-	}
-	traverseNode(doc, 0)
-
-}
-
 type elState int
 
 const (
@@ -48,9 +29,45 @@ const (
 	Strong
 )
 
-var CurrentElState elState = 3
-var bBody = false
+func main() {
+	// Currently just for testing; will also make this use my own instance in future.
+	req, err := http.NewRequest("GET", "https://wiby.me/json/?q=test", nil)
+	if err != nil {
+		println(err)
+		return
+	}
+	htmlData, err := os.Open("Test.html")
+	if err != nil {
+		println(err)
+		return
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		println(err)
+		return
+	}
+	defer res.Body.Close()
+	var resp response
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		println(err)
+		return
+	}
+	json.Unmarshal(body, &resp)
+	fmt.Print(resp)
+	doc, err := html.Parse(htmlData)
+	if err != nil {
+		println(err)
+	}
+	traverseNode(doc, 0)
+}
 
+var (
+	CurrentElState elState = 3
+	bBody                  = false
+)
+
+// Just traverses the node tree and tells the renderer what it's rendering.
 func traverseNode(n *html.Node, depth int) {
 	indent := strings.Repeat("  ", depth)
 	switch n.Type {
@@ -77,27 +94,32 @@ func traverseNode(n *html.Node, depth int) {
 			CurrentElState = Paragraph
 		}
 	case html.CommentNode:
-		//fmt.Printf("%s<!-- %s -->\n", indent, n.Data)
+
 	}
-	//renderNode(n.Data, indent)
-	//fmt.Print(n.Data)
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		traverseNode(c, depth+1)
 	}
 }
 
-// TODO instead of strong and italics, use color instead; the standard way in which it is done.
+// Renders node from the node tree, text being surrounded by a box.
 func renderNode(n *html.Node, ind string) {
-	if CurrentElState == Strong {
+	switch CurrentElState {
+	case Strong:
 		fmt.Printf("%s", "\033[31m"+strings.ToUpper(n.Data)+"\033[0m")
 		CurrentElState = Paragraph
-	} else {
+	default:
 		fmt.Printf("%s", n.Data)
 	}
 }
 
-// TODO add rendering function for specifically boxes.
-// TODO OR render everything with boxes.
-func mainMenu() {
-
+// Initial search screen
+func startMenu() {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Query server")
+	url, err := reader.ReadString('\n')
+	if err != nil {
+		println(err)
+		return
+	}
+	fmt.Println(url)
 }
